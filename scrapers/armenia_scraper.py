@@ -95,8 +95,11 @@ def scrape_armenia_laws():
         download_path = txt_path
         download_text(soup.get_text(), txt_path)
 
-        METADATA.append({'title': law_title, 'link': link, 'download_path': download_path,
-                         'date_scraped': date.today().strftime('%Y-%m-%d')})
+        METADATA.append({'title': law_title,
+                         'link': link,
+                         'download_path': download_path,
+                         'download_date': date.today().strftime('%Y-%m-%d'),
+                         'country': 'Armenia'})
 
     write_metadata_json()
 

@@ -52,10 +52,10 @@ def download_pdf_from_page(link):
     title, pdf_link = find_pdf(soup)
     filename = DOWNLOAD_PATH + '/' + title + '.pdf'
     METADATA.append({'title': title,
-                     'country': 'Albania',
                      'link': pdf_link,
-                     'date_scraped': date.today().strftime('%Y-%m-%d'),
-                     'download_path': filename})
+                     'download_path': filename,
+                     'download_date': date.today().strftime('%Y-%m-%d'),
+                     'country': 'Albania',})
     if path.exists(filename):
         print(filename + " already downloaded")
         return

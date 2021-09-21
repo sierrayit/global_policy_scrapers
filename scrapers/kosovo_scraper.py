@@ -53,10 +53,10 @@ def get_law_text(driver, law_link):
     title = main_law_title.strip().replace(' ', '-').replace('/','-')[:250]
     filename = DOWNLOAD_PATH + title + '.txt'
     METADATA.append({'title': main_law_title,
-                     'country': 'Kosovo',
                      'link': law_link,
-                     'date_scraped': date.today().strftime('%Y-%m-%d'),
-                     'download_path': filename,})
+                     'download_path': filename,
+                     'download_date': date.today().strftime('%Y-%m-%d'),
+                     'country': 'Kosovo'})
     with open(filename, "a") as file_handle:
         file_handle.write(law_text)
         file_handle.close()

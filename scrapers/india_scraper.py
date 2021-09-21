@@ -114,7 +114,7 @@ def download_pdf_from_page(pdf_page):
     if pdf_link == '' or short_title == '':
         print("Unable to find short title or pdf link, returning")
     METADATA.append({'title': short_title, 'link': pdf_link, 'download_path': download_dest,
-                     'download_date':date.today().strftime('%Y-%m-%d')})
+                     'download_date':date.today().strftime('%Y-%m-%d'), 'country': 'India'})
     write_pdf(pdf_link, download_dest)
 
 
