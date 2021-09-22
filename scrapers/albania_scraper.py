@@ -7,6 +7,8 @@ import re
 from bs4 import BeautifulSoup
 import requests
 
+# Cherian wuz here
+
 START_URL = 'https://euralius.eu/index.php/en/library/albanian-legislation/category/360-laws'
 BASE_URL = 'https://euralius.eu'
 DOWNLOAD_PATH = '../data/albania/pdf'
