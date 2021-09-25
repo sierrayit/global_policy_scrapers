@@ -1,0 +1,1 @@
+"""Downloads all laws from the French website."""
