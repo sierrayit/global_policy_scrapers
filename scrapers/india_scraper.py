@@ -3,18 +3,19 @@ from datetime import date
 import re
 import csv
 import json
+from pathlib import Path
 from os import path
 
 from bs4 import BeautifulSoup
 
 import requests
 from selenium import webdriver
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
 
 START_URL = 'https://www.indiacode.nic.in/handle/123456789/1362/browse?type=actno'
 BASE_URL = 'https://www.indiacode.nic.in/'
 DOWNLOAD_PATH = '../data/india/pdf'
-WEB_DRIVER_PATH = '/usr/local/bin/chromedriver'
 
 ACT_PAGES = []
 PDF_PAGES = []
@@ -73,7 +74,8 @@ def write_pdf(link, dest):
         try:
             request = requests.get(link, timeout=10, stream=True)
             success = True
-        except:
+        except Exception as e:
+            print(e)
             continue
         break
 
@@ -101,7 +103,7 @@ def download_pdf_from_page(pdf_page):
             if tag['id'] == 'short_title':
                 short_title = tag.text.lower().replace(" ", "-").replace(",","")
                 break
-    download_dest = download_path + '/' + short_title + ".pdf"
+    download_dest = DOWNLOAD_PATH + '/' + short_title + ".pdf"
 
     pdf_link = ''
     for tag in html.find_all('a'):
@@ -128,7 +130,7 @@ def scrape_intermediate_links_to_csv():
     options.headless = True
     options.add_argument("--window-size=1920,1200")
 
-    driver = webdriver.Chrome(options=options, executable_path=WEB_DRIVER_PATH)
+    driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
     for act_page in ACT_PAGES:
         collect_links_from_act_page(driver, BASE_URL + act_page)
 
@@ -155,11 +157,12 @@ def write_metadata_json():
     """Write out the metadata file."""
     print('Writing scraper metadata json')
     with open(METADATA_PATH, 'w') as jsonfile:
-        json.dump(METADATA)
+        json.dump(METADATA, jsonfile)
 
 
 def scrape_india_laws():
     """Scrapes all laws from the START_URL."""
+    Path(DOWNLOAD_PATH).mkdir(parents=True, exist_ok=True)
     # This step takes a long time. Prefer to run this first, then comment out
     # this line and run the Download stage.
     scrape_intermediate_links_to_csv()

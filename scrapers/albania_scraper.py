@@ -2,6 +2,7 @@
 from datetime import date
 import json
 from os import path
+from pathlib import Path
 import re
 
 from bs4 import BeautifulSoup
@@ -69,7 +70,8 @@ def download_pdf_from_page(link):
             with open(filename, 'wb') as file:
                 for chunk in request.iter_content(1024 * 1024):
                     file.write(chunk)
-        except:
+        except Exception as e:
+            print(e)
             continue
         break
 
@@ -81,6 +83,7 @@ def write_metadata_json():
 
 def scrape_albania_laws():
     """Scrapes all laws from the START_URL."""
+    Path(DOWNLOAD_PATH).mkdir(parents=True, exist_ok=True)
     law_pages = collect_links_from_main_page()
     for link in law_pages:
         print("Scraping law for link " + BASE_URL + link)
