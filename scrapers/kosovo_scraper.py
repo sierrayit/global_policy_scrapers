@@ -1,18 +1,19 @@
 """Download all laws from the Kosovo website."""
 from datetime import date
 import json
+from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 
 
 BASE_URL = 'https://gzk.rks-gov.net'
 START_URL = 'https://gzk.rks-gov.net/LawInForceList.aspx'
-WEB_DRIVER_PATH = '/usr/local/bin/chromedriver'
 
 LINKS = []
 METADATA = []
 METADATA_PATH = '../data/kosovo/metadata.csv'
-DOWNLOAD_PATH = '../data/kosovo/txt'
+DOWNLOAD_PATH = '../data/kosovo/txt/'
 
 def get_links_and_next(atags):
     """Populates the list of LINKS to follow."""
@@ -50,7 +51,7 @@ def get_law_text(driver, law_link):
     main_law_page_button[0].click()
     law_text = driver.find_elements_by_xpath('//*[@id="MainContent_txtDocument"]')[0].text
 
-    title = main_law_title.strip().replace(' ', '-').replace('/','-')[:250]
+    title = main_law_title.strip().replace(' ', '-').replace('/','-')[:249]
     filename = DOWNLOAD_PATH + title + '.txt'
     METADATA.append({'title': main_law_title,
                      'link': law_link,
@@ -69,11 +70,13 @@ def write_metadata_json():
 
 def scrape_kosovo_laws():
     """Scrapes all laws from the Kosovo site."""
+    Path(DOWNLOAD_PATH).mkdir(parents=True, exist_ok=True)
+
     options = Options()
     options.headless = True
     options.add_argument("--window-size=1920,1200")
 
-    driver = webdriver.Chrome(options=options, executable_path=WEB_DRIVER_PATH)
+    driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
     driver.get(START_URL)
 
     atags = driver.find_elements_by_tag_name('a')
