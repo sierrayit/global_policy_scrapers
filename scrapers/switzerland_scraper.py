@@ -10,6 +10,7 @@ import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 import os
+import time
 
 START_URL = "https://www.fedlex.admin.ch"
 DOWNLOAD_PATH = '../data/switzerland/pdf/'
@@ -20,7 +21,7 @@ COUNTRY = 'Switzerland'
 ### Fake user agent to bypass anti-robot walls
 FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 4.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2049.0 Safari/537.36'
 
-### REUSABLE CODE
+### REUSABLE CODE (common to all scrapers)
 
 class ChromeBot:
     def __init__(self, headless=False):
@@ -86,9 +87,9 @@ class ChromeBot:
         self.driver.switch_to.window(tab)
         
     def wait_sec(self, time_sec):
-        import time
         time.sleep(time_sec)
-        # self.driver.implicitly_wait(time_sec)
+        # Not sure why; this doesn't seem to work with the Swiss website.
+        ### self.driver.implicitly_wait(time_sec)
 
 
 def collect_response(url: str, trials=10, timeout=10):
@@ -134,7 +135,7 @@ def write_response(response, pdf_destination_file):
 def append_to_metadata(law_name: str, law_version_date: str, pdf_link: str, filename: str):
     """Appends an item to the METADATA list."""
     METADATA.append({'title': law_name,
-                     'law version date': law_version_date,
+                     'law validity': law_version_date,
                      'link': pdf_link,
                      'download_path': filename,
                      'download_date': date.today().strftime('%Y-%m-%d'),
@@ -172,19 +173,19 @@ def scrape_swiss_laws(headless=True):
 
     # Get all links under section "Textes choisis" (=Selected Texts)
     div_section_xpath = '/html/body/app-root/div/app-home/div/div/div/app-editable-links/section/div[4]/ul'
-    all_text_links = bot.find_xpath(f"{div_section_xpath}//li//a")
-    print(f'Law texts found: {len(all_text_links)}')
+    all_text_a_tags = bot.find_xpath(f"{div_section_xpath}//li//a")
+    all_text_links = list(map(lambda x: x.get_attribute('href'), all_text_a_tags))
+    all_law_titles = list(map(lambda x: x.text, all_text_a_tags))
+    print(f'Law texts found: {len(all_text_a_tags)}')
 
     # Loop over all law text links; download a PDF for each
-    for k, link in enumerate(all_text_links):
-        law_title = link.text
+    for k, (link, law_title) in enumerate(zip(all_text_links, all_law_titles)):
         print(f'\nAttempting to download: ({k + 1}/{len(all_text_links)}) | ', law_title)
         pdf_destination_file = create_pdf_destination_file(law_title)
         if pdf_destination_file is not None:  # Unless file was already downloaded      
             # Navigate to law page
-            bot.navigate_to(link.get_attribute('href'))
+            bot.navigate_to(link)
             bot.wait_sec(4)
-
             # Target most recent version WITH a PDF link
             table_versions = bot.find_xpath('//*[@id="versionContent"]/tbody//tr')  # All table rows
             found = False
@@ -198,14 +199,12 @@ def scrape_swiss_laws(headless=True):
                         bot.wait_sec(4)
                         pdf_reader_target = bot.find_css('.pdf-reader iframe')
                         pdf_source_url = pdf_reader_target[0].get_attribute('src')
-                        print('PDF link is: ', pdf_source_url)
                         # Download PDF file
                         response = collect_response(pdf_source_url)
                         bot.wait_sec(4)
                         write_response(response, pdf_destination_file)
                         # Scrape date
                         law_version_date = version_tds[1].text
-                        print("Law date: ", law_version_date)
                         append_to_metadata(law_title, law_version_date, pdf_source_url, pdf_destination_file)
                         bot.wait_sec(4)
                         found = True
@@ -214,9 +213,6 @@ def scrape_swiss_laws(headless=True):
                     break
             if not found:
                 print(f"Warning: Could not download this law: {law_title}")
-            # Return to start url and move on
-            bot.navigate_to(START_URL)
-            bot.wait_sec(4)
     
     # Wrap-up
     write_metadata_json()
