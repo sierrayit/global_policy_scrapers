@@ -11,7 +11,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 import os
 
-START_URL = "https://www.fedlex.admin.ch"#'https://www.fedlex.admin.ch/fr/cc?news_period=last_day&news_pageNb=1&news_order=desc&news_itemsPerPage=50'
+START_URL = "https://www.fedlex.admin.ch"
 DOWNLOAD_PATH = '../data/switzerland/pdf/'
 METADATA = []
 METADATA_PATH = '../data/switzerland/metadata.json'
@@ -68,7 +68,19 @@ class ChromeBot:
             return self.driver.find_elements_by_tag_name(tag_name)
         except IndexError:
             print('FAILED: Chrome bot could not find elements with that tag name: {tag_name}.')
+
+    def find_text(self, text):
+        try:
+            return self.driver.find_element_by_link_text(text)
+        except IndexError:
+            print('FAILED: Chrome bot could not find elements with that text: {text}.')
             
+    def find_css(self, css_selector):
+        try:
+            return self.driver.find_elements_by_css_selector(css_selector)
+        except IndexError:
+            print('FAILED: Chrome bot could not find elements with that CSS: {css_selector}.')
+
     def switch_to_tab(self, tab_id):
         tab = self.driver.window_handles[tab_id]
         self.driver.switch_to.window(tab)
@@ -107,7 +119,7 @@ def create_pdf_destination_file(title):
         generate_pdf_file_name(title)
     )
     if path.exists(pdf_destination_file):
-        print(pdf_destination_file + " already downloaded")
+        print("Already downloaded!")
         return
     return pdf_destination_file
 
@@ -119,9 +131,10 @@ def write_response(response, pdf_destination_file):
     print("Saved file as binary.")
 
 
-def append_to_metadata(law_name: str, pdf_link: str, filename: str):
+def append_to_metadata(law_name: str, law_version_date: str, pdf_link: str, filename: str):
     """Appends an item to the METADATA list."""
     METADATA.append({'title': law_name,
+                     'law version date': law_version_date,
                      'link': pdf_link,
                      'download_path': filename,
                      'download_date': date.today().strftime('%Y-%m-%d'),
@@ -146,9 +159,9 @@ def scrape_swiss_laws(headless=True):
     # Initialize Selenium Chrome bot and navigate to start page.
     bot = ChromeBot(headless)
     bot.navigate_to(START_URL)
-    bot.wait_sec(5)
+    bot.wait_sec(3)
     
-    # Navigate to Fr button
+    # Click on Fr button; laws only exist in French, German or Italian
     fr_button = bot.find_xpath(
         '/html/body/app-root/div/app-header/header/div[1]/section/app-language/nav/ul/li[2]/a'
     )
@@ -157,70 +170,57 @@ def scrape_swiss_laws(headless=True):
     fr_button[0].click()
     bot.wait_sec(2)
 
-    # Open "Recueil systematique" (=Systematic repository) pannel
-    repo_button = bot.find_xpath(
-        '//*[@id="main-navigation"]/ul/li[5]/a'
-    )
-    if repo_button is None:
-        return  # Stop if a problem occured
-    repo_button[0].click()
-    bot.wait_sec(2)
+    # Get all links under section "Textes choisis" (=Selected Texts)
+    div_section_xpath = '/html/body/app-root/div/app-home/div/div/div/app-editable-links/section/div[4]/ul'
+    all_text_links = bot.find_xpath(f"{div_section_xpath}//li//a")
+    print(f'Law texts found: {len(all_text_links)}')
 
-    # Click on "Accueil RS" link
-    repo_link = bot.find_xpath(
-        '//*[@id="main-navigation"]/ul/li[5]/ul/li/div/app-panel-menu/div/div/div/div/div/div[1]/div/h3/a'
+    # Loop over all law text links; download a PDF for each
+    for k, link in enumerate(all_text_links):
+        law_title = link.text
+        print(f'\nAttempting to download: ({k + 1}/{len(all_text_links)}) | ', law_title)
+        pdf_destination_file = create_pdf_destination_file(law_title)
+        if pdf_destination_file is not None:  # Unless file was already downloaded      
+            # Navigate to law page
+            bot.navigate_to(link.get_attribute('href'))
+            bot.wait_sec(4)
 
-    )
-    if repo_link is None:
-        return  # Stop if a problem occured
-    repo_link[0].click()
-    bot.wait_sec(2)
-
-    print("Program finished running.")
-
-    # # Temp
-    # bot.navigate_to("https://www.fedlex.admin.ch/fr/cc?news_period=last_day&news_pageNb=1&news_order=desc&news_itemsPerPage=10")
-    # bot.wait_sec(3)
-
-    # # Find references to download links for all laws on the page
-    # all_download_links = bot.find_class('picto-download')
-    # print(f'Number of laws to download on the page: {len(all_download_links)}\n')
+            # Target most recent version WITH a PDF link
+            table_versions = bot.find_xpath('//*[@id="versionContent"]/tbody//tr')  # All table rows
+            found = False
+            for row in range(1, len(table_versions) + 1):
+                version_xpath = f'//*[@id="versionContent"]/tbody/tr[{row}]'
+                version_tds = bot.find_xpath(f'{version_xpath}//td')
+                td_links = bot.find_xpath(f'{version_xpath}//td//a')
+                for td_link in td_links: # There can be links to HTML, PDF and/or DOC versions... or no links at all
+                    if re.match('PDF', td_link.text):
+                        td_link.click()  # Should display pdf viewer in <iframe>
+                        bot.wait_sec(4)
+                        pdf_reader_target = bot.find_css('.pdf-reader iframe')
+                        pdf_source_url = pdf_reader_target[0].get_attribute('src')
+                        print('PDF link is: ', pdf_source_url)
+                        # Download PDF file
+                        response = collect_response(pdf_source_url)
+                        bot.wait_sec(4)
+                        write_response(response, pdf_destination_file)
+                        # Scrape date
+                        law_version_date = version_tds[1].text
+                        print("Law date: ", law_version_date)
+                        append_to_metadata(law_title, law_version_date, pdf_source_url, pdf_destination_file)
+                        bot.wait_sec(4)
+                        found = True
+                        break
+                if found:
+                    break
+            if not found:
+                print(f"Warning: Could not download this law: {law_title}")
+            # Return to start url and move on
+            bot.navigate_to(START_URL)
+            bot.wait_sec(4)
     
-    # # Iterate over all download links; click on it, scrape the law, come back to previous page
-    # for k, link in enumerate(all_download_links):
-    #     link.click()
-    #     bot.wait_sec(5)
-    #     bot.switch_to_tab(1)
-        
-    #     # Scrape law title
-    #     law_title = bot.find_class('pdf-title')[0].text
-    #     print(f'\nFound law ({k+1}/{len(all_download_links)}): ', law_title)
-        
-    #     # Create a file name from law title
-    #     filename = generate_pdf_file_name(law_title)
-        
-    #     # Instead of interacting with the PDF viewer, get a link to the PDF from the hidden "object" element of the DOM
-    #     pdf_object = bot.find_tag('object')[0]
-    #     pdf_link = pdf_object.get_attribute('data')
-    #     print(pdf_link)
-
-    #     # # Save PDF file
-    #     # save_pdf_file_as_binary(pdf_link, filename)
-    #     # bot.wait_sec(5)
-
-    #     # # Add entry to metadata
-    #     # append_to_metadata(law_title, pdf_link, filename)
-    #     # bot.wait_sec(1)
-
-    #     bot.driver.close()  # Close the active tab
-    #     bot.switch_to_tab(0)
-    #     bot.wait_sec(1)
-        
-    #     break
-
-    # # write_metadata_json()
-
-    # print('Code ran to here.')
+    # Wrap-up
+    write_metadata_json()
+    print("Program ran successfully.")
 
 if __name__ == '__main__':
     scrape_swiss_laws(headless=True)
