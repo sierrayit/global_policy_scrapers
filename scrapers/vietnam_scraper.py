@@ -26,8 +26,8 @@ def gather_baselinks(max_index = 24):
     print("gathering baselinks")
     
     # gather all links
-    for i in range(16, max_index + 1, 1):
-        url = f"https://vbpl.vn/TW/Pages/vanbanTA.aspx?idLoaiVanBan={i}&dvid=13"
+    for i in range(1, max_index + 1, 1):
+        url = f"https://vbpl.vn/TW/Pages/vanbanTA.aspx?idLoaiVanBan={i}"
         page = requests.get(url)
         soup = BeautifulSoup(page.content, "html.parser")
 
@@ -46,7 +46,7 @@ def loop_through_paging():
     """Navigate page by page based on each url in BASE_URLS and scrape information per page."""
 
     for base_url, doctype in BASE_URLS:
-        print(doctype)
+        print("===", doctype, ":", base_url, "===")
         table_exists = True
         i = 1
 
@@ -60,7 +60,7 @@ def loop_through_paging():
 
             # check if the table of documents exists
             table = soup.select("ul.listLaw li")
-            if len(table) > 0 and i < 3:
+            if len(table) > 0:
                 print("scraping page", i)
                 scrape_documents_info(soup, doctype)
                 i += 1
@@ -89,13 +89,17 @@ def scrape_documents_info(soup, doctype):
         url = BASE_URL + titles[i]["href"]
         title = titles[i].get_text()
         description = descs[i].get_text()
-        published_date = datetime.strptime(pubdates[i], "%d/%m/%Y").strftime("%Y-%m-%d")
-        effective_date = datetime.strptime(effdates[i], "%d/%m/%Y").strftime("%Y-%m-%d")
+        published_date = validated_date(pubdates[i]) #datetime.strptime(pubdates[i], "%d/%m/%Y").strftime("%Y-%m-%d") 
+        effective_date = validated_date(effdates[i]) #datetime.strptime(effdates[i], "%d/%m/%Y").strftime("%Y-%m-%d")
 
         # enter document url, gather additional info and append to metadata - only for English
         language = "english"
-        page = requests.get(url)#, verify = CERTFILE_PATH)
+        page = requests.get(url)
         soup = BeautifulSoup(page.content, "html.parser")
+
+        if soup.find("div", class_ = "fulltext") is None: # if document page is empty, skip the law entierely
+            continue
+
         statusspan = soup.find("span", string = "Effective: ")
         status = statusspan.find_parent("li").get_text().split(":")[1].strip()
 
@@ -131,6 +135,15 @@ def scrape_documents_info(soup, doctype):
             append_metadata(metadata_dict, metadata)
 
     return
+
+
+def validated_date(date_string):
+    """Return a reformatted datetime object and None if original date_string doesn't follow the strptime format."""
+
+    try:
+        return datetime.strptime(date_string, "%d/%m/%Y").strftime("%Y-%m-%d")
+    except ValueError as e:
+        return None
 
 
 def find_download_links(soup, title, language):
